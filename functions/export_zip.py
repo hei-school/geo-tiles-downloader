@@ -9,9 +9,4 @@ def export_zip(folder_path, zip_path):
                 file_path = os.path.join(root, file)
                 arcname = os.path.relpath(file_path, folder_path)
                 zipf.write(file_path, arcname)
-                shutil.rmtree(folder_path)
-
-folder_to_zip = '../input_folder/test'
-zip_folder_output = '../output_file/output.zip'
-
-export_zip(folder_to_zip, zip_folder_output)                
+                shutil.rmtree(folder_path)             
