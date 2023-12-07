@@ -10,10 +10,7 @@ from export_zip import export_zip
 def lambda_handler(event, context):
     query_params = event.get('queryStringParameters', {})
     geo_tiles_download(server, '/tmp/geo_tiles/', force, tiles=None, zoom=None, bbox=None, geojson=None)
-    return {
-        "statusCode": 200,
-        "body": "zipped geo tiles created successfully"
-    }
+    
     a = int(query_params.get('a', 0))
     b = int(query_params.get('b', 0))
     result = a + b
