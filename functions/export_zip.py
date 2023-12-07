@@ -2,8 +2,9 @@ import zipfile
 import os
 import shutil
 
-def export_zip(folder_path, zip_path):
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+def export_zip(folder_path):
+    zip_file_path = '/tmp/output_dir/output.zip'
+    with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_path):
             for file in files:
                 file_path = os.path.join(root, file)
