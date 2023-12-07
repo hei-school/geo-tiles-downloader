@@ -2,7 +2,7 @@ import zipfile
 import os
 import shutil
 
-def zip_folder(folder_path, zip_path):
+def export_zip(folder_path, zip_path):
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_path):
             for file in files:
@@ -14,4 +14,4 @@ def zip_folder(folder_path, zip_path):
 folder_to_zip = '../input_folder/test'
 zip_folder_output = '../output_file/output.zip'
 
-zip_folder(folder_to_zip, zip_folder_output)                
+export_zip(folder_to_zip, zip_folder_output)                
