@@ -12,6 +12,7 @@ import requests
 import supermercado
 
 from functools import reduce
+from pathlib import Path
 
 def generate_tile_def_from_list(args_tiles):
     """
@@ -84,19 +85,17 @@ def generate_tile_def_from_bbox(args_bboxes, zooms, projected):
 
 def generate_tile_def_from_area(args_areas, zooms, projected):
     """
-        yield [x, y, z, xmin, ymin, xmax, ymax]
+    Générer des définitions de tuile à partir de zones géographiques.
 
-        @param args_areas
-                a list of files defining polygon areas with geojson
-        @param zooms
-                a list of zoom levels
-        @param projected
-                'mercator' or 'geographic'
+    @param args_areas: Une liste de chemins de fichiers GeoJSON
+    @param zooms: Une liste de niveaux de zoom
+    @param projected: 'mercator' ou 'geographic'
     """
-    for f in args_areas:
-        with f as f:
+    for geojson_file in args_areas:
+        with open(geojson_file) as f:
             area = json.load(f)
             yield from geerate_tile_def_from_feature(area["features"], zooms, projected)
+
 
 def fetch_tile_worker(id, input_queue, stop_event, server, output, force, stat):
     counter_total = 0
@@ -111,6 +110,10 @@ def fetch_tile_worker(id, input_queue, stop_event, server, output, force, stat):
                 x, y, z, bbox = input_queue.get(True, 1)
                 #print (id, x, y, z)
                 counter_total += 1
+
+                output = Path(output)
+                z = Path(str(z))
+                x = Path(str(x))
 
                 out_dir = output / str(z) / str(x)
                 out_file = out_dir / "{}{}".format(y, ext)
@@ -193,22 +196,22 @@ import argparse
 import pathlib
 
 def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojson=None):
-    server = None
-    with server as f:
+    with open(server) as f:
         server = json.load(f)
 
-    if tile:
-        fetch_tiles(server, generate_tile_def_from_list(tile), output, force);
-    elif zoom:
+    # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
+    if tiles is not None:
+        fetch_tiles(server, generate_tile_def_from_list(tiles), output, force)
+    elif zoom is not None:
+        # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
         if server["parameter"]["srs"] == "EPSG:3857":
             projected = "mercator"
         elif server["parameter"]["srs"] == "EPSG:4326":
             projected = "geographic"
         else:
             raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
-        if geojson:
+
+        if geojson is not None:
             fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), output, force)
-        elif bbox:
+        elif bbox is not None:
             fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), output, force)
-    else:
-        raise argparse.ArgumentTypeError('No explcit tile (-t) or area (-z. -b, -g) is defined')

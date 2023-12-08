@@ -8,17 +8,16 @@ from export_zip import export_zip
 
 
 def lambda_handler(event, context):
-    query_params = event.get('queryStringParameters', {})
-    folder = '/tmp/geo_tiles/'
-    get_geo_tiles(server, '/tmp/geo_tiles/', force, tiles=None, zoom=None, bbox=None, geojson=None)
-    
-    a = int(query_params.get('a', 0))
-    b = int(query_params.get('b', 0))
-    result = a + b
+    query_params = event['queryStringParameters']
+    zoom_size = query_params.get('zoom_size')
+    geojson = json.loads(event['body'])
+    server_path = "server/lyon_wms.json"
+    with open('/tmp/temp.geojson', 'w') as f:
+        json.dump(geojson, f)
+    folder = '/tmp/geo_tiles'
+    get_geo_tiles(server_path, folder, True,tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
 
-    ## return the zip
-    ## add  
     export_zip(folder)
-    zip_file_path = '/tmp/output_dir/output.zip'
+    zip_file_path = '/tmp/output.zip'
 
     return send_file(zip_file_path, as_attachment=True, download_name='tiles.zip')
