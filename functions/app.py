@@ -1,12 +1,10 @@
 import json
 import shutil
+import io
+import base64
 from geo_tiles_download import get_geo_tiles
 from flask import Flask, send_file
 from export_zip import export_zip
-
-# import requests
-
-
 
 def lambda_handler(event, context):
     query_params = event['queryStringParameters']
@@ -18,7 +16,12 @@ def lambda_handler(event, context):
     folder = '/tmp/geo_tiles'
     get_geo_tiles(server_path, folder, True,tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
 
-    export_zip(folder)
-    zip_file_path = '/tmp/output.zip'
-
-    return send_file(zip_file_path, as_attachment=True, download_name='tiles.zip')
+    return {
+        "statusCode": 200,
+        "body": base64.b64encode(export_zip(folder)).decode('utf-8'),
+        'headers': {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': 'attachment; filename="files.zip"'
+        },
+        'isBase64Encoded': True
+    }
