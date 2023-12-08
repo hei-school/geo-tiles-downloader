@@ -8,8 +8,8 @@ Description: >
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-    MemorySize: 128
+    Timeout: 30
+    MemorySize: 512
 
 Resources:
   SumFunction:
@@ -24,8 +24,8 @@ Resources:
         Sum:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /sum
-            Method: get
+            Path: /geo-tiles-download
+            Method: post
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -45,7 +45,7 @@ Outputs:
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   GeoTilesDownlaoderApi:
     Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sum/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   SumFunction:
     Description: Sum Lambda Function ARN
     Value: !GetAtt SumFunction.Arn
