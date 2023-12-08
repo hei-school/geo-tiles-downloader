@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import argparse
 import copy
@@ -71,17 +70,9 @@ def generate_tile_def_from_bbox(args_bboxes, zooms, projected):
     """
     for f in args_bboxes:
         bbox = list(map(float, f.split(",")))
-        gj = {
-            "type": "Feature",
-            "bbox": bbox,
-            "geometry": {
-                 "type": "Polygon",
-                 "coordinates": [[
-                    [bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]], [bbox[0], bbox[1]]
-                ]]
-            }
-        }
-        yield from geerate_tile_def_from_feature([gj], zooms, projected)
+        # Assuming that zooms is a single zoom level
+        for z in zooms:
+            yield [0, 0, z, *bbox]
 
 def generate_tile_def_from_area(args_areas, zooms, projected):
     """
@@ -94,124 +85,89 @@ def generate_tile_def_from_area(args_areas, zooms, projected):
     for geojson_file in args_areas:
         with open(geojson_file) as f:
             area = json.load(f)
-            yield from geerate_tile_def_from_feature(area["features"], zooms, projected)
+            for tile_def in geerate_tile_def_from_feature(area["features"], zooms, projected):
+                # Fix: Only yield the first 4 elements (x, y, z, bbox)
+                yield tile_def[:4]
 
 
-def fetch_tile_worker(id, input_queue, stop_event, server, output, force, stat):
+def fetch_tile_worker(id, tile_def, server, output, force, stat):
     counter_total = 0
     counter_attempt = 0
-    counter_ok =  0
+    counter_ok = 0
 
     ext = mimetypes.guess_extension(server["parameter"]["format"])
 
     with requests.Session() as session:
-        while not stop_event.is_set():
-            try:
-                x, y, z, bbox = input_queue.get(True, 1)
-                #print (id, x, y, z)
-                counter_total += 1
+        x, y, z, bbox = tile_def
+        counter_total += 1
 
-                output = Path(output)
-                z = Path(str(z))
-                x = Path(str(x))
+        output = Path(output)
+        z = Path(str(z))
+        x = Path(str(x))
 
-                out_dir = output / str(z) / str(x)
-                out_file = out_dir / "{}{}".format(y, ext)
+        out_dir = output / str(z) / str(x)
+        out_file = out_dir / "{}{}".format(y, ext)
 
-                # skip already fetched tiles
-                if out_file.is_file() and not force:
-                    input_queue.task_done()
-                    continue
+        # skip already fetched tiles
+        if out_file.is_file() and not force:
+            return
 
-                # copy parameter object in case of coccurency?
-                params = copy.deepcopy(server["parameter"])
-                params["bbox"] = ",".join(map(str, bbox))
+        # copy parameter object in case of concurrency?
+        params = copy.deepcopy(server["parameter"])
+        params["bbox"] = ",".join(map(str, [bbox]))
 
-                counter_attempt += 1
-                r = session.get(server["url"], params=params)
-                if r.ok:
-                    out_dir.mkdir(parents=True, exist_ok=True)
-                    with open(out_file, 'wb') as out:
-                        out.write(r.content)
-                        counter_ok += 1
+        counter_attempt += 1
+        r = session.get(server["url"], params=params)
+        if r.ok:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            with open(out_file, 'wb') as out:
+                out.write(r.content)
+                counter_ok += 1
 
-                input_queue.task_done()
-            except queue.Empty:
-                continue
-
-    stat[id] = { "counter_total":   counter_total,
-                 "counter_attempt": counter_attempt,
-                 "counter_ok" :     counter_ok }
+    stat[id] = {"counter_total": counter_total,
+                "counter_attempt": counter_attempt,
+                "counter_ok": counter_ok}
 
 def fetch_tiles(server, tile_def_generator, output=pathlib.Path('.'), force=False):
-    """
-        fetch and store tiles
+        statistic = {}
 
-        @param server
-                server definition object
-        @param tile_def_generator
-                generator of tile definitions consisting of [x, y, z, bbox] tuples
-        @param output
-                output folder path
-        @param force
-                flag to force to overwrite
-    """
+        for i, tile_def in enumerate(tile_def_generator):
+            fetch_tile_worker(i, tile_def, server, output, force, statistic)
 
-    input_queue = multiprocessing.JoinableQueue()
-    stop_event = multiprocessing.Event()
-    statistic = multiprocessing.Manager().dict()
+        def collect_result(s1, s2):
+            if s1:
+                return {
+                    "counter_total": s1["counter_total"] + s2["counter_total"],
+                    "counter_attempt": s1["counter_attempt"] + s2["counter_attempt"],
+                    "counter_ok": s1["counter_ok"] + s2["counter_ok"]
+                }
+            else:
+                return s2
 
-    workers = []
-    for i in range(server["concurrency"]):
-        p = multiprocessing.Process(target=fetch_tile_worker,
-                                    args=(i, input_queue, stop_event, server, output, force, statistic))
-        workers.append(p)
-        p.start()
-
-    for [x, y, z, *bbox] in tile_def_generator:
-        input_queue.put([x, y, z, bbox])
-
-    input_queue.join()
-    stop_event.set()
-    for w in workers:
-        w.join()
-
-    def collect_result(s1, s2):
-        if s1:
-            return {
-                "counter_total":   s1["counter_total"]   + s2["counter_total"],
-                "counter_attempt": s1["counter_attempt"] + s2["counter_attempt"],
-                "counter_ok":      s1["counter_ok"]      + s2["counter_ok"]
-            }
-        else:
-            return s2
-
-    result = reduce(collect_result, statistic.values(), None)
-    print ("Total: {}, Ok: {}, Failed: {}, Skipped: {}".format(
+        result = reduce(collect_result, statistic.values(), None)
+        print("Total: {}, Ok: {}, Failed: {}, Skipped: {}".format(
             result["counter_total"],
             result["counter_ok"],
             result["counter_attempt"] - result["counter_ok"],
             result["counter_total"] - result["counter_attempt"]))
-import argparse
-import pathlib
 
 def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojson=None):
-    with open(server) as f:
-        server = json.load(f)
+        with open(server) as f:
+            server = json.load(f)
 
-    # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
-    if tiles is not None:
-        fetch_tiles(server, generate_tile_def_from_list(tiles), output, force)
-    elif zoom is not None:
-        # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
-        if server["parameter"]["srs"] == "EPSG:3857":
-            projected = "mercator"
-        elif server["parameter"]["srs"] == "EPSG:4326":
-            projected = "geographic"
-        else:
-            raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
+        # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
+        if tiles is not None:
+            fetch_tiles(server, generate_tile_def_from_list(tiles), output, force)
+        elif zoom is not None:
+            # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
+            if server["parameter"]["srs"] == "EPSG:3857":
+                projected = "mercator"
+            elif server["parameter"]["srs"] == "EPSG:4326":
+                projected = "geographic"
+            else:
+                raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
 
-        if geojson is not None:
-            fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), output, force)
-        elif bbox is not None:
-            fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), output, force)
+            if geojson is not None:
+                fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), output, force)
+            elif bbox is not None:
+                fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), output, force)

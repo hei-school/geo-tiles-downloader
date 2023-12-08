@@ -18,10 +18,10 @@ def lambda_handler(event, context):
 
     return {
         "statusCode": 200,
-        "body": base64.b64encode(export_zip(folder)).decode('utf-8'),
+        "body": base64.b64encode(export_zip(folder)).decode(),
         'headers': {
             'Content-Type': 'application/zip',
             'Content-Disposition': 'attachment; filename="files.zip"'
         },
-        'isBase64Encoded': True
+        'isBase64Encoded': False
     }
