@@ -22,10 +22,12 @@ Resources:
       - x86_64
       Events:
         GeoTilesDownloadFunction:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: HttpApi # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /geo-tiles-download
-            Method: post
+            Path: /{proxy+}
+            Method: ANY
+            
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -45,7 +47,7 @@ Outputs:
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   GeoTilesDownlaodApi:
     Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   GeoTilesDownload:
     Description: GeoTilesDownload Lambda Function ARN
     Value: !GetAtt GeoTilesDownloadFunction.Arn

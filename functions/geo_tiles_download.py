@@ -39,7 +39,6 @@ def geerate_tile_def_from_feature(features, zooms, projected):
                 'mercator' or 'geographic'
     """
     # $ supermercado burn <zoom>
-    features = [f for f in supermercado.super_utils.filter_features(features)]
     for zoom in zooms:
         zr = zoom.split("-")
         for z in range(int(zr[0]),  int(zr[1] if len(zr) > 1 else zr[0]) + 1):
@@ -82,10 +81,11 @@ def generate_tile_def_from_area(args_areas, zooms, projected):
     @param zooms: Une liste de niveaux de zoom
     @param projected: 'mercator' ou 'geographic'
     """
+    
     for geojson_file in args_areas:
         with open(geojson_file) as f:
             area = json.load(f)
-            for tile_def in geerate_tile_def_from_feature(area["features"], zooms, projected):
+            for tile_def in geerate_tile_def_from_feature(eval(area).get('features'), zooms, projected):
                 # Fix: Only yield the first 4 elements (x, y, z, bbox)
                 yield tile_def[:4]
 
