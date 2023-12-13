@@ -85,7 +85,7 @@ def generate_tile_def_from_area(args_areas, zooms, projected):
     for geojson_file in args_areas:
         with open(geojson_file) as f:
             area = json.load(f)
-            for tile_def in geerate_tile_def_from_feature(eval(area).get('features'), zooms, projected):
+            for tile_def in geerate_tile_def_from_feature(area.get('features'), zooms, projected):
                 # Fix: Only yield the first 4 elements (x, y, z, bbox)
                 yield tile_def[:4]
 
