@@ -1,4 +1,3 @@
-
 import argparse
 import copy
 import json
@@ -81,12 +80,12 @@ def generate_tile_def_from_area(args_areas, zooms, projected):
     @param zooms: Une liste de niveaux de zoom
     @param projected: 'mercator' ou 'geographic'
     """
-    
+
     for geojson_file in args_areas:
         with open(geojson_file) as f:
             area = json.load(f)
             for tile_def in geerate_tile_def_from_feature(area.get('features'), zooms, projected):
-                # Fix: Only yield the first 4 elements (x, y, z, bbox)
+                # fix: Only yield the first 4 elements (x, y, z, bbox)
                 yield tile_def[:4]
 
 
@@ -157,11 +156,11 @@ def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojs
             server = json.loads(server_string)
             print("Loaded server:", type(server), type(server_string))
 
-        # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
+        # Logic for retrieving tiles based on optional arguments supplied where applicable
         if tiles is not None:
             fetch_tiles(server, generate_tile_def_from_list(tiles), output, force)
         elif zoom is not None:
-            # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
+            # Determine the projected coordinate system based on the server parameter
             if server["parameter"]["srs"] == "EPSG:3857":
                 print("1")
                 projected = "mercator"
