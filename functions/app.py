@@ -26,33 +26,34 @@ def encoded_payload_from_event(event):
     else:
         return payload.encode("utf-8")
 
+
 def lambda_handler(event, context):
         query_params = event.get("queryStringParameters", {})
         zoom_size = query_params.get('zoom_size')
-        
+
         payload = encoded_payload_from_event(event)
-        
+
         byte_data = encoded_payload_from_event(event)
         decoded_string = byte_data.decode()
         first_line = decoded_string.strip().splitlines()[0]
         parts = decoded_string.split(first_line)
         server = json.loads('\n'.join(parts[1].strip().splitlines()[2:]))
         geojson = json.loads('\n'.join(parts[2].strip().splitlines()[2:]))
-    
-       # server_content, geojson_content = extract_content_from_multipart(encoded_payload_from_event(event))     
+
+       # server_content, geojson_content = extract_content_from_multipart(encoded_payload_from_event(event))
         with open('/tmp/temp.geojson', 'w') as json_file:
             json.dump(geojson, json_file)
         with open('/tmp/server.json', 'w') as json_file:
             json.dump(server, json_file)
-            
+
         folder = '/tmp/geo_tiles'
 
         while not os.path.exists('/tmp/temp.geojson') or not os.path.exists('/tmp/server.json'):
             time.sleep(1)
-        
+
 
         get_geo_tiles("/tmp/server.json", folder, True, tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
-        
+
         return {
             "statusCode": 200,
             "body": to_base64(export_zip(folder)),
@@ -61,6 +62,4 @@ def lambda_handler(event, context):
                 'Content-Disposition': 'attachment; filename="files.zip"'
             },
             "isBase64Encoded": True
-        } 
-
-       
+        }
