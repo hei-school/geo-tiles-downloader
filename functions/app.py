@@ -26,20 +26,6 @@ def encoded_payload_from_event(event):
     else:
         return payload.encode("utf-8")
 
-# def extract_content_from_multipart(body):
-#     fields = parse_form_data(BytesIO(body))
-#     server_content = None
-#     geojson_content = None
-
-#     for field in fields:
-#         if field.name == 'server':
-#             server_content = field.value.decode('utf-8')
-#         elif field.name == 'geojson_file':
-#             geojson_content = field.value.decode('utf-8')
-
-#     return server_content, geojson_content
-
-
 def lambda_handler(event, context):
         query_params = event.get("queryStringParameters", {})
         zoom_size = query_params.get('zoom_size')
