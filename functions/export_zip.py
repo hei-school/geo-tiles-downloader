@@ -11,7 +11,9 @@ def export_zip(folder_path):
                 file_path = os.path.join(root, file)
                 arcname = os.path.relpath(file_path, folder_path)
                 zipf.write(file_path, arcname)
-                shutil.rmtree(folder_path)
+
+        # Move the shutil.rmtree outside of the loop
+    shutil.rmtree(folder_path)
 
     in_memory_zip.seek(0)
     zip_bytes = in_memory_zip.read()

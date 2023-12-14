@@ -153,7 +153,9 @@ def fetch_tiles(server, tile_def_generator, output=pathlib.Path('.'), force=Fals
 
 def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojson=None):
         with open(server) as f:
-            server = json.load(f)
+            server_string = f.read()
+            server = json.loads(server_string)
+            print("Loaded server:", type(server), type(server_string))
 
         # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
         if tiles is not None:
@@ -161,13 +163,20 @@ def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojs
         elif zoom is not None:
             # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
             if server["parameter"]["srs"] == "EPSG:3857":
+                print("1")
                 projected = "mercator"
+                
             elif server["parameter"]["srs"] == "EPSG:4326":
+                print("2")
                 projected = "geographic"
+                
             else:
+                print(3)
                 raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
 
             if geojson is not None:
+                print(4)
                 fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), output, force)
             elif bbox is not None:
+                print(6)
                 fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), output, force)

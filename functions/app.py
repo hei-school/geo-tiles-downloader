@@ -4,6 +4,8 @@ import io
 import os
 import time
 import base64
+import cgi
+from email import message_from_string
 from io import BytesIO
 from multipart import parse_form_data
 
@@ -26,44 +28,27 @@ def encoded_payload_from_event(event):
     else:
         return payload.encode("utf-8")
 
-# def extract_content_from_multipart(body):
-#     fields = parse_form_data(BytesIO(body))
-#     server_content = None
-#     geojson_content = None
-
-#     for field in fields:
-#         if field.name == 'server':
-#             server_content = field.value.decode('utf-8')
-#         elif field.name == 'geojson_file':
-#             geojson_content = field.value.decode('utf-8')
-
-#     return server_content, geojson_content
-
 
 def lambda_handler(event, context):
         query_params = event.get("queryStringParameters", {})
         zoom_size = query_params.get('zoom_size')
-        
-        payload = encoded_payload_from_event(event)
-        
-        byte_data = encoded_payload_from_event(event)
-        decoded_string = byte_data.decode()
-        first_line = decoded_string.strip().splitlines()[0]
-        parts = decoded_string.split(first_line)
-        server = json.loads('\n'.join(parts[1].strip().splitlines()[2:]))
-        geojson = json.loads('\n'.join(parts[2].strip().splitlines()[2:]))
     
-       # server_content, geojson_content = extract_content_from_multipart(encoded_payload_from_event(event))     
+        fp = io.BytesIO(event['body'].encode('utf-8'))
+        pdict = cgi.parse_header(event['headers']['Content-Type'])[1]
+        if 'boundary' in pdict:
+            pdict['boundary'] = pdict['boundary'].encode('utf-8')
+        pdict['CONTENT-LENGTH'] = len(event['body'])
+        form_data = cgi.parse_multipart(fp, pdict)
+        
+        geojson = form_data.get('geojson')[0]
+        server = form_data.get('server')[0]
+        
         with open('/tmp/temp.geojson', 'w') as json_file:
-            json.dump(geojson, json_file)
+            json.dump( json.loads(geojson.decode('utf-8')), json_file)
         with open('/tmp/server.json', 'w') as json_file:
-            json.dump(server, json_file)
+            json.dump(json.loads(server.decode('utf-8')), json_file)
             
         folder = '/tmp/geo_tiles'
-
-        while not os.path.exists('/tmp/temp.geojson') or not os.path.exists('/tmp/server.json'):
-            time.sleep(1)
-        
 
         get_geo_tiles("/tmp/server.json", folder, True, tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
         
