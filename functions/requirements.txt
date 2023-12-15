@@ -24,3 +24,4 @@ yarl==1.9.4
 mercantile
 supermercado
 asyncio
+multipart
