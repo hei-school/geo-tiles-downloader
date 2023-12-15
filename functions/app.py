@@ -32,13 +32,12 @@ def lambda_handler(event, context):
     query_params = event.get("queryStringParameters", {})
     zoom_size = query_params.get('zoom_size')
 
-    fp = io.BytesIO(event['body'].encode('utf-8'))
-    pdict = cgi.parse_header(event['headers']['Content-Type'])[1]
+    fp = io.BytesIO(encoded_payload_from_event(event))
+    pdict = cgi.parse_header(event['headers']['content-type'])[1]
     if 'boundary' in pdict:
         pdict['boundary'] = pdict['boundary'].encode('utf-8')
     pdict['CONTENT-LENGTH'] = len(event['body'])
     form_data = cgi.parse_multipart(fp, pdict)
-
     geojson = form_data.get('geojson')[0]
     server = form_data.get('server')[0]
 
