@@ -35,7 +35,7 @@ def lambda_handler(event, context):
         while not os.path.exists('/tmp/temp.geojson'):
             time.sleep(1)
 
-        get_geo_tiles(server_path, folder, True, tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
+        get_geo_tiles(server=server_path, output=folder, force=True, tiles=None, zoom=[zoom_size], bbox=None, geojson=['/tmp/temp.geojson'])
         
         return {
             "statusCode": 200,
