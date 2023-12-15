@@ -3,6 +3,7 @@
 import argparse
 import copy
 import json
+from export_zip import export_zip
 import mercantile
 import mimetypes
 import multiprocessing
@@ -125,6 +126,8 @@ def fetch_tile_worker(server, tile, output, force, stat):
                     with open(out_file, 'wb') as out:
                         out.write(r.content)
                         counter_ok += 1
+        except:
+            print('Unexpected error')
 
     stat.append({ "counter_total":   counter_total,
                                  "counter_attempt": counter_attempt,
