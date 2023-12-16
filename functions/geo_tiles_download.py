@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
 
 import argparse
 import copy
 import json
+from export_zip import export_zip
 import mercantile
 import mimetypes
 import multiprocessing
@@ -11,7 +13,6 @@ import requests
 import supermercado
 
 from functools import reduce
-from pathlib import Path
 
 def generate_tile_def_from_list(args_tiles):
     """
@@ -39,6 +40,7 @@ def geerate_tile_def_from_feature(features, zooms, projected):
                 'mercator' or 'geographic'
     """
     # $ supermercado burn <zoom>
+    features = [f for f in supermercado.super_utils.filter_features(features)]
     for zoom in zooms:
         zr = zoom.split("-")
         for z in range(int(zr[0]),  int(zr[1] if len(zr) > 1 else zr[0]) + 1):
@@ -69,105 +71,119 @@ def generate_tile_def_from_bbox(args_bboxes, zooms, projected):
     """
     for f in args_bboxes:
         bbox = list(map(float, f.split(",")))
-        # Assuming that zooms is a single zoom level
-        for z in zooms:
-            yield [0, 0, z, *bbox]
+        gj = {
+            "type": "Feature",
+            "bbox": bbox,
+            "geometry": {
+                 "type": "Polygon",
+                 "coordinates": [[
+                    [bbox[0], bbox[1]], [bbox[2], bbox[1]], [bbox[2], bbox[3]], [bbox[0], bbox[3]], [bbox[0], bbox[1]]
+                ]]
+            }
+        }
+        yield from geerate_tile_def_from_feature([gj], zooms, projected)
 
 def generate_tile_def_from_area(args_areas, zooms, projected):
     """
-    Générer des définitions de tuile à partir de zones géographiques.
+        yield [x, y, z, xmin, ymin, xmax, ymax]
 
-    @param args_areas: Une liste de chemins de fichiers GeoJSON
-    @param zooms: Une liste de niveaux de zoom
-    @param projected: 'mercator' ou 'geographic'
+        @param args_areas
+                a list of files defining polygon areas with geojson
+        @param zooms
+                a list of zoom levels
+        @param projected
+                'mercator' or 'geographic'
     """
-    
-    for geojson_file in args_areas:
-        with open(geojson_file) as f:
-            area = json.load(f)
-            for tile_def in geerate_tile_def_from_feature(eval(area).get('features'), zooms, projected):
-                # Fix: Only yield the first 4 elements (x, y, z, bbox)
-                yield tile_def[:4]
+    for f in args_areas:
+        with open(f) as file:
+            area = json.load(file)
+            yield from geerate_tile_def_from_feature(area["features"], zooms, projected)
 
-
-def fetch_tile_worker(id, tile_def, server, output, force, stat):
+def fetch_tile_worker(server, tile, output, force, stat):
     counter_total = 0
     counter_attempt = 0
-    counter_ok = 0
+    counter_ok =  0
 
     ext = mimetypes.guess_extension(server["parameter"]["format"])
 
     with requests.Session() as session:
-        x, y, z, bbox = tile_def
-        counter_total += 1
+        try:
+            x, y, z, *bbox = tile
+            counter_total += 1
+            out_dir = output / str(z) / str(x)
+            out_file = out_dir / "{}{}".format(y, ext)
 
-        output = Path(output)
-        z = Path(str(z))
-        x = Path(str(x))
+            # skip already fetched tiles
+            if not out_file.is_file():
+                # copy parameter object in case of coccurency?
+                params = copy.deepcopy(server["parameter"])
+                params["bbox"] = ",".join(map(str, bbox))
 
-        out_dir = output / str(z) / str(x)
-        out_file = out_dir / "{}{}".format(y, ext)
+                counter_attempt += 1
+                r = session.get(server["url"], params=params)
+                if r.ok:
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    with open(out_file, 'wb') as out:
+                        out.write(r.content)
+                        counter_ok += 1
+        except:
+            print('Unexpected error')
 
-        # skip already fetched tiles
-        if out_file.is_file() and not force:
-            return
-
-        # copy parameter object in case of concurrency?
-        params = copy.deepcopy(server["parameter"])
-        params["bbox"] = ",".join(map(str, [bbox]))
-
-        counter_attempt += 1
-        r = session.get(server["url"], params=params)
-        if r.ok:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            with open(out_file, 'wb') as out:
-                out.write(r.content)
-                counter_ok += 1
-
-    stat[id] = {"counter_total": counter_total,
-                "counter_attempt": counter_attempt,
-                "counter_ok": counter_ok}
+    stat.append({ "counter_total":   counter_total,
+                                 "counter_attempt": counter_attempt,
+                                 "counter_ok" :     counter_ok })
 
 def fetch_tiles(server, tile_def_generator, output=pathlib.Path('.'), force=False):
-        statistic = {}
+    statistic = []
+    """
+        fetch and store tiles
 
-        for i, tile_def in enumerate(tile_def_generator):
-            fetch_tile_worker(i, tile_def, server, output, force, statistic)
+        @param server
+                server definition object
+        @param tile_def_generator
+                generator of tile definitions consisting of [x, y, z, bbox] tuples
+        @param output
+                output folder path
+        @param force
+                flag to force to overwrite
+    """
+    for [x, y, z, *bbox] in tile_def_generator:
+        fetch_tile_worker(server=server, tile=[x, y, z, *bbox], output=output, force=force, stat=statistic)
 
-        def collect_result(s1, s2):
-            if s1:
-                return {
-                    "counter_total": s1["counter_total"] + s2["counter_total"],
-                    "counter_attempt": s1["counter_attempt"] + s2["counter_attempt"],
-                    "counter_ok": s1["counter_ok"] + s2["counter_ok"]
-                }
-            else:
-                return s2
+    def collect_result(s1, s2):
+        if s1:
+            return {
+                "counter_total":   s1["counter_total"]   + s2["counter_total"],
+                "counter_attempt": s1["counter_attempt"] + s2["counter_attempt"],
+                "counter_ok":      s1["counter_ok"]      + s2["counter_ok"]
+            }
+        else:
+            return s2
 
-        result = reduce(collect_result, statistic.values(), None)
-        print("Total: {}, Ok: {}, Failed: {}, Skipped: {}".format(
+    result = reduce(collect_result, statistic, None)
+    print ("Total: {}, Ok: {}, Failed: {}, Skipped: {}".format(
             result["counter_total"],
             result["counter_ok"],
             result["counter_attempt"] - result["counter_ok"],
             result["counter_total"] - result["counter_attempt"]))
 
-def get_geo_tiles(server, output, force, tiles=None, zoom=None, bbox=None, geojson=None):
-        with open(server) as f:
-            server = json.load(f)
-
-        # Logique pour récupérer les tuiles en fonction des arguments facultatifs fournis le cas échéant
-        if tiles is not None:
-            fetch_tiles(server, generate_tile_def_from_list(tiles), output, force)
-        elif zoom is not None:
-            # Déterminer le système de coordonnées projetées en fonction du paramètre du serveur
-            if server["parameter"]["srs"] == "EPSG:3857":
-                projected = "mercator"
-            elif server["parameter"]["srs"] == "EPSG:4326":
-                projected = "geographic"
-            else:
-                raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
-
-            if geojson is not None:
-                fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), output, force)
-            elif bbox is not None:
-                fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), output, force)
+def get_geo_tiles(server_path, output, force, tiles=None, zoom=None, bbox=None, geojson=None):
+    # WMS server definition
+    server = None
+    with open(server_path) as file:
+        server = json.load(file)
+    if tiles:
+        fetch_tiles(server, generate_tile_def_from_list(tile), pathlib.Path(output).absolute(), force)
+    elif zoom:
+        if server["parameter"]["srs"] == "EPSG:3857":
+            projected = "mercator"
+        elif server["parameter"]["srs"] == "EPSG:4326":
+            projected = "geographic"
+        else:
+            raise argparse.ArgumentTypeError('Only EPSG:3857 and EPSG:4326 are supported.')
+        if geojson:
+            fetch_tiles(server, generate_tile_def_from_area(geojson, zoom, projected), pathlib.Path(output).absolute(), force)
+        elif bbox:
+            fetch_tiles(server, generate_tile_def_from_bbox(bbox, zoom, projected), pathlib.Path(output).absolute(), force)
+    else:
+        raise argparse.ArgumentTypeError('No explcit tile (-t) or area (-z. -b, -g) is defined')
